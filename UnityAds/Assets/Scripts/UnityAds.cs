@@ -1,10 +1,16 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Threading;
 using UnityEngine;
 using UnityEngine.Advertisements;
+using UnityEngine.Networking;
+using UnityEngine.UI;
 
-public class UnityAds : MonoBehaviour,IUnityAdsListener
+public class UnityAds : MonoBehaviour, IUnityAdsListener
 {
+    public Text DebugText;
     public bool TestMode = true;
 
     public string AndroidID = "3619755";
@@ -13,24 +19,38 @@ public class UnityAds : MonoBehaviour,IUnityAdsListener
     private string RewardedID = "rewardedVideo";
     private string BannerID = "banner";
     private string InterstitialID = "video";
+    private Timer InternetTimer;
+    private int InternetCheckPeriod { get; } = 5000;  /// (ms)      5 seconds
 
     void Start()
     {
-        Advertisement.AddListener(this);
-#if UNITY_ANDROID
-        Advertisement.Initialize(AndroidID, TestMode);
-#else
-        Advertisement.Initialize(IOSID, TestMode);
-#endif
-
+        /// Check Internet Connection
+        StartCoroutine(checkInternetConnection((isConnected) => {
+            if (isConnected)            /// if can connect
+            {
+                Debug.Log("Got internet. Initializing Ads");
+                InitAds();              /// initialize ads
+            }
+            else                        /// if no connection
+            {
+                InternetTimer = new Timer(InternetTimer_Tick, null, 0, InternetCheckPeriod);    /// Start a timer to check internet every InternetCheckPeriod milliseconds
+                Debug.Log("No internet. Starting Timer");
+            }
+        }));
     }
+    /// <summary>
+    ///  Shows Banner Ad when it is ready
+    /// </summary>
     public void ShowRewardedAd()
     {
-       if(Advertisement.IsReady(RewardedID))
+        if (Advertisement.IsReady(RewardedID))
         {
             Advertisement.Show(RewardedID);
         }
     }
+    /// <summary>
+    /// Shos Interstitial Ad if it is ready
+    /// </summary>
     public void ShowInterstitialAd()
     {
         if (Advertisement.IsReady(InterstitialID))
@@ -42,16 +62,74 @@ public class UnityAds : MonoBehaviour,IUnityAdsListener
     {
         StartCoroutine(ShowBannerWhenReady());
     }
+    /// <summary>
+    /// Occurs once in every specified period and checks internet connection.
+    /// </summary>
+    /// <param name="state"></param>
+    private void InternetTimer_Tick(object state)
+    {
+
+        InternetTimer.Change(Timeout.Infinite, Timeout.Infinite);           /// Disable Timer to avoid it to throw another event while this event is being processed.
+        StartCoroutine(checkInternetConnection((isConnected) =>
+        {           /// Check internet connection
+            if (isConnected)                                                /// if can connect
+            {
+                Debug.Log("Got internet");
+                InitAds();                                                  /// initialize ads
+                StopTimer();                                                /// Stop and dispose this timer because it wont be needed anymore
+            }
+            else
+            {
+                InternetTimer.Change(InternetCheckPeriod, InternetCheckPeriod);               /// Set timer to throw following event
+                Debug.Log("No internet: Timer Counter is:");
+            }
+        }));
+    }
+    private void StopTimer()
+    {
+        if (InternetTimer != null)                                          /// if the timer object exists
+        {
+            InternetTimer.Change(Timeout.Infinite, Timeout.Infinite);       /// Set timer intervval to infinity
+            InternetTimer.Dispose();                                        /// Dispose the object
+            InternetTimer = null;                                           ///
+        }
+    }
+    private void InitAds()
+    {
+        Advertisement.AddListener(this);                                    /// advertisement listener to check events 
+#if UNITY_ANDROID
+        Advertisement.Initialize(AndroidID, TestMode);
+#else
+        Advertisement.Initialize(IOSID, TestMode);
+#endif
+    }
     IEnumerator ShowBannerWhenReady()
     {
-        while(!Advertisement.IsReady(BannerID))
+        while (!Advertisement.IsReady(BannerID))                            /// while banner ad is not ready
         {
-            yield return new WaitForSeconds(0.5f);
+            yield return new WaitForSeconds(0.5f);                          /// wait for 0.5 seconds
         }
-        Advertisement.Banner.SetPosition(BannerPosition.BOTTOM_CENTER);
-        Advertisement.Banner.Show(BannerID);
+        Advertisement.Banner.SetPosition(BannerPosition.BOTTOM_CENTER);     /// Set banner position
+        Advertisement.Banner.Show(BannerID);                                /// Show banner ad
     }
-
+    /// <summary>
+    /// Checks internet connection and returns a boolen
+    /// </summary>
+    /// <param name="action"></param>
+    /// <returns></returns>
+    IEnumerator checkInternetConnection(Action<bool> action)
+    {
+        UnityWebRequest request = new UnityWebRequest("http://google.com");      /// ping google.com to see if there is internet connection.
+        yield return request.SendWebRequest();
+        if (request.error == null)                                                /// if error is null, this means connection succeed.
+        {
+            action(true);                                                        /// return true
+        }
+        else
+        {
+            action(false);                                                       /// return false
+        }
+    }
     public void OnUnityAdsReady(string placementId)
     {
     }
@@ -66,9 +144,9 @@ public class UnityAds : MonoBehaviour,IUnityAdsListener
 
     public void OnUnityAdsDidFinish(string placementId, ShowResult showResult)
     {
-        if(placementId== RewardedID)
+        if (placementId == RewardedID)
         {
-            switch(showResult)
+            switch (showResult)
             {
                 case ShowResult.Finished:
                     Debug.Log("Ads Finished! Reward the Player!");

@@ -1,7 +1,5 @@
 ﻿using System;
 using System.Collections;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.Threading;
 using UnityEngine;
 using UnityEngine.Advertisements;
@@ -10,7 +8,7 @@ using UnityEngine.UI;
 
 public class UnityAds : MonoBehaviour, IUnityAdsListener
 {
-    public Text DebugText;
+    public Text GoldText;
     public bool TestMode = true;
 
     public string AndroidID = "3619755";
@@ -20,10 +18,13 @@ public class UnityAds : MonoBehaviour, IUnityAdsListener
     private string BannerID = "banner";
     private string InterstitialID = "video";
     private Timer InternetTimer;
-    private int InternetCheckPeriod { get; } = 5000;  /// (ms)      5 seconds
+    private int InternetCheckPeriod { get; } = 5000;  /// (ms)      time period  to check internet connection.
+    private int Gold = 0;
+
 
     void Start()
     {
+        Gold = PlayerPrefs.GetInt("Gold");
         /// Check Internet Connection
         StartCoroutine(checkInternetConnection((isConnected) => {
             if (isConnected)            /// if can connect
@@ -74,14 +75,14 @@ public class UnityAds : MonoBehaviour, IUnityAdsListener
         {           /// Check internet connection
             if (isConnected)                                                /// if can connect
             {
-                Debug.Log("Got internet");
+                Debug.Log("Got internet Connection");
                 InitAds();                                                  /// initialize ads
                 StopTimer();                                                /// Stop and dispose this timer because it wont be needed anymore
             }
             else
             {
                 InternetTimer.Change(InternetCheckPeriod, InternetCheckPeriod);               /// Set timer to throw following event
-                Debug.Log("No internet: Timer Counter is:");
+                Debug.Log("No internet Connection");
             }
         }));
     }
@@ -149,7 +150,10 @@ public class UnityAds : MonoBehaviour, IUnityAdsListener
             switch (showResult)
             {
                 case ShowResult.Finished:
-                    Debug.Log("Ads Finished! Reward the Player!");
+                    Gold += 100;                                            /// give 100 gold to user
+                    PlayerPrefs.SetInt("GOLD", Gold);                       /// save current gold value to memory
+                    GoldText.text = Gold.ToString();                        /// show gold amount on screen;
+                    Debug.Log("Ads Finished! Reward the Player!");          
                     return;
             }
         }
